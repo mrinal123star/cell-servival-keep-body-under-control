@@ -18,7 +18,6 @@
   #popup-modal { transform: scale(0.9); opacity: 0; transition: all .3s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
   #pause-overlay.active #popup-modal { transform: scale(1); opacity: 1; }
   
-  /* Animated warning banner running along restricted outer tissue boundaries */
   .boundary-warning {
     animation: warningPulse 2s infinite ease-in-out;
   }
@@ -106,7 +105,6 @@
     <h1 class="text-4xl sm:text-5xl font-black mb-3 bg-gradient-to-r from-sky-400 via-cyan-300 to-emerald-400 bg-clip-text text-transparent">CELL SURVIVAL: ARM INFECTION</h1>
     <p class="text-slate-300 text-xs sm:text-sm mb-5 leading-relaxed">You control a <b>Leucocyte (White Blood Cell)</b> defending the muscle tissue inside an <b>Human Arm</b>! Stay strictly inside the arm borders—the space outside warns: <i>U DONT HAVE THIS AREAS POST</i>!</p>
     
-    <!-- EDUCATIONAL SECTION -->
     <div class="bg-slate-900/80 rounded-2xl p-4 text-left border border-cyan-500/30 mb-6 space-y-3">
       <div class="text-center font-bold text-xs uppercase tracking-wider text-cyan-300 border-b border-slate-700 pb-2">
         🧠 How Nutrition Affects White Blood Cells
@@ -149,9 +147,10 @@
 
 <!-- GAME OVER SCREEN WITH TIMER DEBRIEF -->
 <div id="gameover-screen" class="gone absolute inset-0 flex items-center justify-center bg-slate-950/90 backdrop-blur-md z-30 p-4">
-  <div class="glass p-8 rounded-3xl max-w-lg text-center border-2 border-rose-500/50 shadow-2xl">
-    <h2 class="text-4xl font-black text-rose-500 mb-1">ARM MEMBRANE DESTROYED</h2>
-    <div class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">Cellular Debrief & Analysis</div>
+  <div class="glass p-8 rounded-3xl max-w-xl text-center border-2 border-rose-500/50 shadow-2xl max-h-[95vh] overflow-y-auto">
+    <!-- TITLE UPDATED TO WHITE BLOOD CELL DESTROYED -->
+    <h2 class="text-4xl font-black text-rose-500 mb-1">WHITE BLOOD CELL DESTROYED</h2>
+    <div class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">Cellular Collapse Science Analysis</div>
     
     <div class="grid grid-cols-2 gap-3 mb-4">
       <div class="bg-slate-900/60 p-3 rounded-xl border border-slate-800">
@@ -166,14 +165,18 @@
 
     <div class="text-xs text-slate-300 bg-slate-900/40 p-3 rounded-xl mb-4 border border-slate-800" id="final-foods"></div>
 
-    <div class="bg-gradient-to-br from-indigo-950/80 to-purple-950/80 p-4 rounded-2xl border border-purple-500/30 text-left mb-6">
-      <div class="flex justify-between items-center mb-2 border-b border-purple-500/20 pb-2">
-        <span class="text-xs font-bold uppercase tracking-wider text-purple-300">💡 Post-Game Science Lesson</span>
-        <span class="text-xs font-mono font-bold bg-purple-900/60 text-purple-200 px-2.5 py-0.5 rounded-full border border-purple-400/30" id="debrief-timer">15s</span>
+    <!-- DYNAMIC POST-GAME SCIENCE LESSON -->
+    <div class="bg-gradient-to-br from-indigo-950/90 via-slate-900/90 to-purple-950/90 p-5 rounded-2xl border border-purple-500/40 text-left mb-6 shadow-xl">
+      <div class="flex justify-between items-center mb-3 border-b border-purple-500/30 pb-2">
+        <span class="text-xs font-black uppercase tracking-wider text-purple-300 flex items-center gap-1.5">
+          <span>🧬</span> CELLULAR DEFENSE POST-MORTEM & LESSON
+        </span>
+        <span class="text-xs font-mono font-bold bg-purple-900/80 text-purple-200 px-3 py-1 rounded-full border border-purple-400/40" id="debrief-timer">15s</span>
       </div>
-      <p id="debrief-text" class="text-xs text-purple-100 leading-relaxed font-medium">
-        Loading cellular science lesson...
-      </p>
+      
+      <div id="debrief-breakdown" class="space-y-3 text-xs leading-relaxed">
+        <!-- Dynamically populated via JS -->
+      </div>
     </div>
 
     <button id="restart-btn" disabled class="w-full py-4 bg-slate-800 text-slate-400 font-bold rounded-2xl shadow-lg cursor-not-allowed transition-all">
@@ -211,12 +214,6 @@ const FOODS = [
   { c:'junk', n:'Donut', e:'🍩', f:'Refined flour and sugars increase free-radical stress in tissue fluids, weakening cell membrane defenses.' }
 ];
 
-const DEBRIEF_LESSONS = [
-  "Amino acids from proteins (like Dal, Eggs, and Milk) are essential building blocks. Without them, leucocytes cannot repair damaged membrane walls or seal breach cracks!",
-  "Vitamin C acts as an antioxidant shield for leucocytes. When fighting bacteria, white blood cells consume high levels of Vitamin C to prevent self-injury from reactive oxygen molecules.",
-  "Unhealthy junk foods high in refined sugars and trans fats cause cellular inflammation, slowing down leucocyte movement and delaying immune response times."
-];
-
 /* ---------- State ---------- */
 let scene, camera, renderer, player, shieldMesh, rangeRing, clock, rafId, sun;
 let germs = [], drops = [], bolts = [], fx = [], breachCracks = [];
@@ -229,7 +226,6 @@ const $ = id => document.getElementById(id);
 const rand = (a, b) => a + Math.random() * (b - a);
 const pick = arr => arr[Math.floor(Math.random() * arr.length)];
 
-// ARM ARENA DIMENSIONS (Longer Z axis to form an arm/bicep shape)
 const ARM_HALF_X = 14;
 const ARM_HALF_Z = 34;
 
@@ -264,7 +260,6 @@ function tissueTexture() {
   gr.addColorStop(0, '#5a1c2e'); gr.addColorStop(1, '#1e0814');
   g.fillStyle = gr; g.fillRect(0, 0, 512, 512);
   
-  // Muscle fiber striations
   g.strokeStyle = 'rgba(235,90,120,.2)'; g.lineWidth = 4;
   for (let i = -100; i < 612; i += 18) {
     g.beginPath(); g.moveTo(i, 0); g.lineTo(i + 120, 512); g.stroke();
@@ -277,7 +272,6 @@ function tissueTexture() {
   return t;
 }
 
-// Canvas texture generation for the border line with "U DONT HAVE THIS AREAS POST" text
 function buildBorderCanvasTexture(msg) {
   const c = document.createElement('canvas'); c.width = 2048; c.height = 128;
   const g = c.getContext('2d');
@@ -323,7 +317,6 @@ function buildBreachCracks() {
   breachCracks.forEach(c => scene.remove(c));
   breachCracks = [];
   
-  // Placed strategically along the long arm tissue
   const crackPositions = [
     new THREE.Vector3(0, -0.4, -26),
     new THREE.Vector3(-9, -0.4, -12),
@@ -404,27 +397,21 @@ function initThree() {
   scene.add(sun);
   const rim = new THREE.PointLight(0x38bdf8, 1.4, 60); rim.position.set(-12, 8, -10); scene.add(rim);
 
-  /* ARM ARENA FLOOR (Tapered Cylinder/Box Shape to mimic human arm muscle) */
   const armGeo = new THREE.BoxGeometry(ARM_HALF_X * 2, 1.5, ARM_HALF_Z * 2);
   const armMat = new THREE.MeshStandardMaterial({ map: tissueTexture(), roughness: 0.55, metalness: 0.05 });
   const floor = new THREE.Mesh(armGeo, armMat);
   floor.position.y = -1.4; floor.receiveShadow = true; scene.add(floor);
 
-  /* BORDER LINES AND RESTRICTED AREA BANNERS ("U DONT HAVE THIS AREAS POST") */
   const borderTex = buildBorderCanvasTexture("U DONT HAVE THIS AREAS POST");
   
-  // INNER BORDER LINE
   const innerMat = new THREE.MeshBasicMaterial({ map: borderTex, transparent: true, opacity: 0.95, side: THREE.DoubleSide });
   const innerBorder = new THREE.Mesh(new THREE.PlaneGeometry(ARM_HALF_X * 2 - 0.5, ARM_HALF_Z * 2 - 0.5), innerMat);
   innerBorder.rotation.x = -Math.PI / 2; innerBorder.position.y = -0.55; scene.add(innerBorder);
 
-  // OUTER BORDER LINE (RESTRICTED ZONE)
   const outerMat = new THREE.MeshBasicMaterial({ map: borderTex, transparent: true, opacity: 0.6, side: THREE.DoubleSide });
   const outerBorder = new THREE.Mesh(new THREE.PlaneGeometry(ARM_HALF_X * 2 + 5, ARM_HALF_Z * 2 + 5), outerMat);
   outerBorder.rotation.x = -Math.PI / 2; outerBorder.position.y = -0.58; scene.add(outerBorder);
 
-  // Glowing boundary edge lines
-  const edgeMat = new THREE.LineBasicMaterial({ color: 0xf43f5e, linewidth: 4 });
   const borderBox = new THREE.Box3(new THREE.Vector3(-ARM_HALF_X, -0.5, -ARM_HALF_Z), new THREE.Vector3(ARM_HALF_X, -0.5, ARM_HALF_Z));
   const helper = new THREE.Box3Helper(borderBox, 0xf43f5e);
   scene.add(helper);
@@ -617,6 +604,77 @@ function sweepDead() {
   }
 }
 
+/* ---------- DYNAMIC POST-GAME SCIENCE LESSON GENERATOR ---------- */
+function generatePostGameScienceLesson() {
+  const container = $('debrief-breakdown');
+  container.innerHTML = '';
+
+  let primaryLesson = '';
+  let biologicalCause = '';
+  let dietaryAdvice = '';
+
+  if (eaten.junk > eaten.protein && eaten.junk > eaten.veg) {
+    primaryLesson = "⚠️ High Inflammation & Saturated Fat Overload";
+    biologicalCause = `Absorbing ${eaten.junk} junk items flooded your tissue fluid with trans fats and excess sugars. This caused acute leukocyte paralysis (chemotaxis slowdown), preventing your cell from dodging pathogens or recharging its enzyme beam in time!`;
+    dietaryAdvice = "Replace ultra-processed foods with whole foods like nuts, fruits, and whole grains to keep immune response times fast and inflammation low.";
+  } else if (eaten.protein === 0) {
+    primaryLesson = "⚠️ Structural Membrane & Biomass Deficiency";
+    biologicalCause = "You picked up 0 Protein items during the battle! Without amino acid building blocks, your cell could not harvest Amino Biomass to seal open breach cracks. This allowed pathogen swarms to endlessly pour through the open tissue breaches!";
+    dietaryAdvice = "Eat protein-rich foods like Dal (lentils), Eggs, Milk, or Paneer every day so your body has amino acids ready to repair damaged cells and seal wound sites.";
+  } else if (eaten.veg === 0) {
+    primaryLesson = "⚠️ Weak Mucosal Shield Barriers";
+    biologicalCause = "You absorbed 0 Vegetables! Vegetables supply Beta-carotene (Vitamin A) and Vitamin K, which construct the physical mucosal barrier shield around cells. Without shield charges, direct pathogen hits inflicted 100% damage directly onto your cell wall.";
+    dietaryAdvice = "Include green leafy vegetables like spinach, carrots, and broccoli in your daily meals to build up your body's physical mucosal defense barriers.";
+  } else if (eaten.vitc === 0) {
+    primaryLesson = "⚠️ Low Antioxidant Defense & Short Beam Range";
+    biologicalCause = "Your white blood cell lacked Vitamin C! Vitamin C protects leukocytes from self-damage while fighting bacteria and increases enzyme beam range. Without it, your cell was forced to engage pathogens at dangerously close range.";
+    dietaryAdvice = "Incorporate citrus fruits (oranges, lemons) or Amla into your daily diet to keep white blood cells powered up with antioxidants.";
+  } else {
+    primaryLesson = "⚡ High-Level Immune Battle Performance";
+    biologicalCause = `Great job balancing your intake (${eaten.protein} Protein, ${eaten.veg} Veggies, ${eaten.vitc} Vit C)! However, as infection wave ${wave} escalated, the pathogen density outpaced your leucocyte's membrane repair rate.`;
+    dietaryAdvice = "Keep prioritizing balanced nutrition (proteins + vitamins + fiber) to sustain peak cellular ATP energy and rapid tissue repair during severe infections.";
+  }
+
+  // 50% CHANCE SPECIAL SURPRISE HEADER + REQUESTED EXTRA LINE
+  const showSpecialHeadline = Math.random() < 0.50;
+  let surpriseBannerHTML = '';
+  
+  if (showSpecialHeadline) {
+    surpriseBannerHTML = `
+      <div class="bg-gradient-to-r from-amber-500/30 via-yellow-400/40 to-amber-500/30 border-2 border-amber-400 p-3 rounded-xl text-center mb-3 shadow-lg animate-pulse">
+        <div class="font-black text-amber-300 text-sm tracking-wide uppercase">
+          🤔 DID U KNOW THAT THIS HAPPENS 24/7 IN UR REAL BODY?
+        </div>
+        <div class="text-[11px] text-amber-100 mt-1 font-bold">
+          THATS WHY U SHOULD EAT HEALTHY FOOD BY A BALANCED DIET TO SUPPORT BODYS HERO WHITE BLOOD CELLS!
+        </div>
+      </div>
+    `;
+  }
+
+  // BUILD THE DYNAMIC HTML LESSON CARDS
+  container.innerHTML = `
+    ${surpriseBannerHTML}
+    
+    <div class="bg-rose-900/40 border border-rose-500/40 p-3 rounded-xl">
+      <div class="font-bold text-rose-300 text-xs mb-1">${primaryLesson}</div>
+      <div class="text-slate-200">${biologicalCause}</div>
+    </div>
+    
+    <div class="bg-indigo-900/40 border border-indigo-500/40 p-3 rounded-xl">
+      <div class="font-bold text-sky-300 text-xs mb-1">🔬 Key Cellular Biology Takeaway</div>
+      <div class="text-slate-200">
+        White blood cells (leucocytes) rely on continuous biochemical supplies. <b>Proteins</b> rebuild broken membrane structures, <b>Vitamin C</b> shields DNA and organelles from oxidative stress, and <b>Vegetables</b> build protective mucosal barriers. Junk food triggers free-radical damage that weakens cell defenses.
+      </div>
+    </div>
+
+    <div class="bg-emerald-900/40 border border-emerald-500/40 p-3 rounded-xl">
+      <div class="font-bold text-emerald-300 text-xs mb-1">🥗 Real-World Nutrition Goal</div>
+      <div class="text-slate-200">${dietaryAdvice}</div>
+    </div>
+  `;
+}
+
 /* ---------- State Management & Debrief Timer ---------- */
 function resetState() {
   [...germs, ...drops].forEach(o => scene.remove(o)); bolts.forEach(b => scene.remove(b.grp)); fx.forEach(f => scene.remove(f.m));
@@ -641,7 +699,7 @@ function endGame() {
   $('final-wave').textContent = wave;
   $('final-foods').textContent = `Nutrients absorbed: ${eaten.vitc} Vitamin C, ${eaten.protein} Protein, ${eaten.veg} Vegetables | Junk items: ${eaten.junk}`;
   
-  $('debrief-text').textContent = pick(DEBRIEF_LESSONS);
+  generatePostGameScienceLesson();
 
   $('hud').classList.add('gone'); 
   $('gameover-screen').classList.remove('gone');
@@ -712,7 +770,6 @@ function animate() {
     const len = Math.hypot(dx, dz) || 1;
     player.position.x += dx / len * speedMultiplier * dt; player.position.z += dz / len * speedMultiplier * dt;
     
-    /* STRICT RECTANGULAR ARM BORDER CLAMPING WITH WARNING ALERT */
     if (Math.abs(player.position.x) > ARM_HALF_X) {
       player.position.x = Math.sign(player.position.x) * ARM_HALF_X;
       showAlert('U DONT HAVE THIS AREAS POST!', '#f43f5e');
