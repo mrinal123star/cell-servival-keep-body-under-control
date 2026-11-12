@@ -3,21 +3,29 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Cell Survival: Body Breached</title>
+<title>Cell Survival: Arm Tissue Breached</title>
 <script src="https://cdn.tailwindcss.com/3.4.17"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <style>
-  html, body { margin: 0; height: 100%; overflow: hidden; background: #12040c; font-family: system-ui, sans-serif; user-select: none; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #0c0308; font-family: system-ui, sans-serif; user-select: none; }
   canvas { display: block; width: 100vw; height: 100vh; }
   .glass { background: rgba(14,10,24,.85); backdrop-filter: blur(14px); border: 1px solid rgba(125,211,252,.28); box-shadow: 0 0 25px rgba(14,165,233,.18); }
   .gone { display: none !important; }
-  #vignette { background: radial-gradient(ellipse at center, transparent 45%, rgba(10,0,8,.75) 100%); }
+  #vignette { background: radial-gradient(ellipse at center, transparent 40%, rgba(10,0,8,.85) 100%); }
   #dmg { background: radial-gradient(ellipse at center, transparent 30%, rgba(255,30,60,.55) 100%); opacity: 0; transition: opacity .35s; }
   
-  /* Pause Modal styling */
   #pause-overlay { transition: opacity .3s ease; }
   #popup-modal { transform: scale(0.9); opacity: 0; transition: all .3s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
   #pause-overlay.active #popup-modal { transform: scale(1); opacity: 1; }
+  
+  /* Animated warning banner running along restricted outer tissue boundaries */
+  .boundary-warning {
+    animation: warningPulse 2s infinite ease-in-out;
+  }
+  @keyframes warningPulse {
+    0%, 100% { opacity: 0.7; transform: scale(1); }
+    50% { opacity: 1; transform: scale(1.02); }
+  }
 </style>
 </head>
 <body class="text-white">
@@ -26,21 +34,24 @@
 <div id="dmg" class="absolute inset-0 pointer-events-none z-10"></div>
 
 <!-- HUD -->
-<div id="hud" class="gone absolute inset-0 pointer-events-none flex flex-col justify-between p-5 z-20">
+<div id="hud" class="gone absolute inset-0 pointer-events-none flex flex-col justify-between p-4 z-20">
   <div class="flex flex-wrap justify-between items-start w-full max-w-6xl mx-auto gap-3">
     <div class="glass px-4 py-3 rounded-2xl">
-      <div class="text-xs uppercase tracking-wider text-rose-300 font-semibold">Membrane Integrity <span id="health-val">100%</span></div>
+      <div class="text-xs uppercase tracking-wider text-rose-300 font-semibold">Arm Membrane Health <span id="health-val">100%</span></div>
       <div class="w-48 bg-slate-800 h-3 rounded-full overflow-hidden mt-1 border border-slate-700">
         <div id="health-bar" class="bg-gradient-to-r from-rose-500 to-emerald-400 h-full transition-all duration-300" style="width:100%"></div>
       </div>
-      <div class="mt-2 text-xs text-emerald-300">Shield <span id="shield-val" class="tracking-widest">none</span></div>
+      <div class="mt-2 text-xs text-emerald-300">Mucosal Shield <span id="shield-val" class="tracking-widest">none</span></div>
     </div>
     <div class="glass px-5 py-3 rounded-2xl text-center">
-      <div class="text-xs uppercase tracking-wider text-amber-400 font-semibold">Germs Zapped</div>
+      <div class="text-xs uppercase tracking-wider text-amber-400 font-semibold">Pathogens Destroyed</div>
       <div class="text-3xl font-black text-amber-300" id="score-val">0</div>
     </div>
     <div class="glass px-5 py-3 rounded-2xl text-right">
-      <div class="text-xs uppercase tracking-wider text-purple-400 font-semibold">Infection Wave</div>
+      <div class="text-xs uppercase tracking-wider text-purple-400 font-semibold flex items-center justify-end gap-1">
+        <span>Active Arm Breaches</span>
+        <span id="cracks-count" class="text-rose-400 font-bold">5/5</span>
+      </div>
       <div class="text-2xl font-bold text-purple-300" id="wave-val">1</div>
       <div class="text-xs text-orange-300 mt-1" id="buff-val"></div>
     </div>
@@ -48,12 +59,18 @@
 
   <div id="alert-box" class="text-center font-bold text-lg tracking-wide transition-opacity duration-300 opacity-0"></div>
 
+  <!-- BOUNDARY WARNING HUD OVERLAY -->
+  <div class="w-full max-w-xl mx-auto text-center border border-rose-500/50 bg-rose-950/70 py-1.5 px-4 rounded-full text-xs font-bold uppercase tracking-widest text-rose-300 shadow-lg shadow-rose-950/50 boundary-warning">
+    ⚠️ RESTRICTED AREA OUTSIDE THE ARM BORDER • U DONT HAVE THIS AREAS POST ⚠️
+  </div>
+
   <div class="flex flex-wrap justify-between items-end w-full max-w-6xl mx-auto text-xs text-slate-300 gap-3">
     <div class="glass px-4 py-2 rounded-xl">Move <b class="text-sky-300">WASD / Arrows</b> &nbsp; Zap <b class="text-sky-300">SPACE / Click</b></div>
-    <div class="glass px-4 py-2 rounded-xl w-40">Zap charge
+    <div class="glass px-4 py-2 rounded-xl">🧱 Amino Biomass: <b id="scrap-val" class="text-pink-300 text-sm">0</b> <span class="text-slate-400">(Touch cracks to repair)</span></div>
+    <div class="glass px-4 py-2 rounded-xl w-40">Enzyme Beam Charge
       <div class="bg-slate-800 h-2 rounded-full mt-1 overflow-hidden"><div id="zap-bar" class="bg-cyan-300 h-full" style="width:100%"></div></div>
     </div>
-    <div class="glass px-4 py-2 rounded-xl">🍊 Vit C = range + damage &nbsp; 🥚 Protein = repair &nbsp; 🥬 Veggies = shield</div>
+    <div class="glass px-4 py-2 rounded-xl">🍊 Vit C = Range/Power &nbsp; 🥚 Protein = Repair/Biomass &nbsp; 🥬 Veggies = Shield &nbsp; 🍟 Junk = Sluggish Debuff</div>
   </div>
 </div>
 
@@ -69,11 +86,11 @@
       </div>
     </div>
     <div class="bg-emerald-950/40 border border-emerald-500/30 rounded-xl p-3 mb-4">
-      <div class="text-xs uppercase text-emerald-400 font-bold tracking-wider">Cellular Effect</div>
+      <div class="text-xs uppercase text-emerald-400 font-bold tracking-wider">Cellular Impact</div>
       <div id="pop-effect" class="text-sm font-bold text-emerald-200 mt-0.5"></div>
     </div>
     <div class="bg-slate-900/40 rounded-xl p-4 mb-6 border border-slate-800">
-      <div class="text-xs uppercase text-amber-400 font-bold tracking-wider mb-1">Biological Fact</div>
+      <div class="text-xs uppercase text-amber-400 font-bold tracking-wider mb-1">Human Biology Fact</div>
       <div id="pop-fact" class="text-sm text-slate-200 leading-relaxed"></div>
     </div>
     <button id="resume-btn" onclick="resumeGame()" class="w-full py-3.5 bg-gradient-to-r from-emerald-500 to-cyan-500 hover:from-emerald-400 hover:to-cyan-400 text-slate-950 font-black text-base rounded-xl shadow-lg shadow-cyan-500/30 transition-all transform active:scale-95">
@@ -86,88 +103,135 @@
 <div id="start-screen" class="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-slate-950 via-rose-950 to-indigo-950 z-30 p-4">
   <div class="glass p-8 rounded-3xl max-w-2xl text-center max-h-[95vh] overflow-y-auto">
     <div class="text-sky-400 font-bold tracking-widest text-xs uppercase mb-1">PM-POSHAN Digital Creativity Challenge</div>
-    <h1 class="text-4xl sm:text-5xl font-black mb-3 bg-gradient-to-r from-sky-400 via-cyan-300 to-emerald-400 bg-clip-text text-transparent">CELL SURVIVAL: BODY BREACHED</h1>
-    <p class="text-slate-300 text-xs sm:text-sm mb-5 leading-relaxed">You command a Leucocyte (White Blood Cell). Pathogens are leaking into the bloodstream through membrane cracks! Zap germs and absorb nutrient drops to keep the cellular wall intact.</p>
+    <h1 class="text-4xl sm:text-5xl font-black mb-3 bg-gradient-to-r from-sky-400 via-cyan-300 to-emerald-400 bg-clip-text text-transparent">CELL SURVIVAL: ARM INFECTION</h1>
+    <p class="text-slate-300 text-xs sm:text-sm mb-5 leading-relaxed">You control a <b>Leucocyte (White Blood Cell)</b> defending the muscle tissue inside an <b>Human Arm</b>! Stay strictly inside the arm borders—the space outside warns: <i>U DONT HAVE THIS AREAS POST</i>!</p>
     
     <!-- EDUCATIONAL SECTION -->
     <div class="bg-slate-900/80 rounded-2xl p-4 text-left border border-cyan-500/30 mb-6 space-y-3">
       <div class="text-center font-bold text-xs uppercase tracking-wider text-cyan-300 border-b border-slate-700 pb-2">
-        🧠 How Balanced Nutrition Empowers Immune Cells
+        🧠 How Nutrition Affects White Blood Cells
       </div>
       <div class="flex items-start gap-3">
         <span class="text-2xl">🍊</span>
         <div>
-          <b class="text-orange-300 text-sm">Vitamin C (Citrus & Amla):</b>
-          <p class="text-xs text-slate-300 leading-normal">Acts as an essential antioxidant, protecting white blood cells against self-damage while boosting their zap range and response speed.</p>
+          <b class="text-orange-300 text-sm">Vitamin C (Citrus Fruits & Amla):</b>
+          <p class="text-xs text-slate-300 leading-normal">Protects white blood cells from oxidative stress and powers up enzyme beam range and chain targeting capacity.</p>
         </div>
       </div>
       <div class="flex items-start gap-3">
         <span class="text-2xl">🥚</span>
         <div>
-          <b class="text-pink-300 text-sm">Proteins (Pulses, Eggs, Milk):</b>
-          <p class="text-xs text-slate-300 leading-normal">Provide essential amino acids—the building blocks required to repair damaged cell membranes and produce antibodies.</p>
+          <b class="text-pink-300 text-sm">Proteins (Eggs, Pulses & Milk):</b>
+          <p class="text-xs text-slate-300 leading-normal">Provides essential amino acids to synthesize tissue biomass. Use this biomass to seal open membrane breaches!</p>
         </div>
       </div>
       <div class="flex items-start gap-3">
         <span class="text-2xl">🥬</span>
         <div>
-          <b class="text-emerald-300 text-sm">Green Vegetables & Carrots:</b>
-          <p class="text-xs text-slate-300 leading-normal">Rich in Beta-Carotene, Iron, and Vitamin A/K to maintain strong mucosal barrier linings that physically shield cells from germ entry.</p>
+          <b class="text-emerald-300 text-sm">Vegetables (Spinach, Carrots, Broccoli):</b>
+          <p class="text-xs text-slate-300 leading-normal">Provides Beta-carotene and Vitamin A to build strong mucosal shields that block pathogen invasion hits.</p>
+        </div>
+      </div>
+      <div class="flex items-start gap-3">
+        <span class="text-2xl">🍟</span>
+        <div>
+          <b class="text-rose-400 text-sm">Junk Foods (Ultra-Processed & Sugary Treats):</b>
+          <p class="text-xs text-slate-300 leading-normal">Triggers inflammation and free-radical damage! Causes cell sluggishness (slow movement speed) and delays enzyme beam recharge.</p>
         </div>
       </div>
     </div>
 
     <button id="start-btn" class="w-full py-4 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-black text-lg rounded-2xl shadow-lg shadow-cyan-500/25 transition-all">
-      INITIATE DEFENSE PROTOCOL
+      INITIATE ARM DEFENSE PROTOCOL
     </button>
   </div>
 </div>
 
-<!-- GAME OVER SCREEN -->
+<!-- GAME OVER SCREEN WITH TIMER DEBRIEF -->
 <div id="gameover-screen" class="gone absolute inset-0 flex items-center justify-center bg-slate-950/90 backdrop-blur-md z-30 p-4">
-  <div class="glass p-9 rounded-3xl max-w-md text-center" style="border-color:rgba(244,63,94,.4)">
-    <h2 class="text-4xl font-black text-rose-500 mb-2">BREACH DETECTED</h2>
-    <p class="text-slate-400 text-sm mb-5">The pathogen swarm overwhelmed the cellular wall.</p>
-    <div class="text-xl font-bold text-amber-400">Germs zapped: <span id="final-score">0</span></div>
-    <div class="text-sm text-slate-300 mt-2 mb-6" id="final-foods"></div>
-    <button id="restart-btn" class="w-full py-4 bg-rose-600 hover:bg-rose-500 text-white font-bold rounded-2xl shadow-lg shadow-rose-600/30">REGENERATE CELL</button>
+  <div class="glass p-8 rounded-3xl max-w-lg text-center border-2 border-rose-500/50 shadow-2xl">
+    <h2 class="text-4xl font-black text-rose-500 mb-1">ARM MEMBRANE DESTROYED</h2>
+    <div class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">Cellular Debrief & Analysis</div>
+    
+    <div class="grid grid-cols-2 gap-3 mb-4">
+      <div class="bg-slate-900/60 p-3 rounded-xl border border-slate-800">
+        <div class="text-xs text-slate-400">Pathogens Zapped</div>
+        <div class="text-2xl font-black text-amber-400" id="final-score">0</div>
+      </div>
+      <div class="bg-slate-900/60 p-3 rounded-xl border border-slate-800">
+        <div class="text-xs text-slate-400">Infection Wave</div>
+        <div class="text-2xl font-black text-purple-300" id="final-wave">1</div>
+      </div>
+    </div>
+
+    <div class="text-xs text-slate-300 bg-slate-900/40 p-3 rounded-xl mb-4 border border-slate-800" id="final-foods"></div>
+
+    <div class="bg-gradient-to-br from-indigo-950/80 to-purple-950/80 p-4 rounded-2xl border border-purple-500/30 text-left mb-6">
+      <div class="flex justify-between items-center mb-2 border-b border-purple-500/20 pb-2">
+        <span class="text-xs font-bold uppercase tracking-wider text-purple-300">💡 Post-Game Science Lesson</span>
+        <span class="text-xs font-mono font-bold bg-purple-900/60 text-purple-200 px-2.5 py-0.5 rounded-full border border-purple-400/30" id="debrief-timer">15s</span>
+      </div>
+      <p id="debrief-text" class="text-xs text-purple-100 leading-relaxed font-medium">
+        Loading cellular science lesson...
+      </p>
+    </div>
+
+    <button id="restart-btn" disabled class="w-full py-4 bg-slate-800 text-slate-400 font-bold rounded-2xl shadow-lg cursor-not-allowed transition-all">
+      CELLULAR RECOVERY IN PROGRESS (<span id="btn-timer">15</span>s)
+    </button>
   </div>
 </div>
 
 <script>
 /* ---------- Food database ---------- */
 const CATS = {
-  vitc:    { label: 'Vitamin C', color: 0xff9f1c, css: '#fdba74', effect: 'Zap range, damage and chain jumps UP!' },
-  protein: { label: 'Protein',   color: 0xff6fa5, css: '#f9a8d4', effect: 'Membrane repaired: +25 integrity' },
-  veg:     { label: 'Vegetable', color: 0x4ade80, css: '#86efac', effect: 'Shield +2 charges: blocks germ hits' }
+  vitc:    { label: 'Vitamin C', color: 0xff9f1c, css: '#fdba74', effect: 'Enzyme beam range, power, and chain jumps UP!' },
+  protein: { label: 'Protein',   color: 0xff6fa5, css: '#f9a8d4', effect: 'Membrane +25 integrity & +1 Amino Biomass!' },
+  veg:     { label: 'Vegetable', color: 0x4ade80, css: '#86efac', effect: 'Mucosal Shield +2 charges: blocks pathogen attacks' },
+  junk:    { label: 'Junk Food (Debuff)', color: 0xef4444, css: '#f87171', effect: 'DEBUFF: Sluggish speed & slower beam recharge for 10s!' }
 };
+
 const FOODS = [
-  { c:'vitc', n:'Amla', e:'🍏', f:'One of the richest natural sources of vitamin C, which helps white blood cells work and helps build collagen for skin and membranes.' },
-  { c:'vitc', n:'Orange', e:'🍊', f:'Vitamin C is an antioxidant that protects immune cells from damage while they fight infection.' },
-  { c:'vitc', n:'Lemon', e:'🍋', f:'Vitamin C helps your body absorb iron from plant foods like dal and spinach.' },
-  { c:'vitc', n:'Kiwi', e:'🥝', f:'Kiwi can match or beat oranges in vitamin C, and it adds fibre too.' },
-  { c:'protein', n:'Dal', e:'🫘', f:'Dal gives plant protein. Proteins break into amino acids that rebuild cells and tissue. Eating dal with rice or roti gives a fuller amino acid mix.' },
-  { c:'protein', n:'Egg', e:'🥚', f:'Egg protein contains all nine essential amino acids that the body cannot make on its own.' },
-  { c:'protein', n:'Paneer', e:'🧀', f:'Paneer gives protein plus calcium, helping tissue repair and strong bones.' },
-  { c:'protein', n:'Milk', e:'🥛', f:'Milk protein (casein and whey) supports growth and repair of muscles and tissues.' },
-  { c:'protein', n:'Peanuts', e:'🥜', f:'Peanuts are an affordable protein-rich snack with healthy fats and vitamin E.' },
-  { c:'veg', n:'Spinach (Palak)', e:'🥬', f:'Spinach brings iron, folate and vitamin K. Iron helps blood carry oxygen to every cell.' },
-  { c:'veg', n:'Carrot', e:'🥕', f:'Beta-carotene in carrots becomes vitamin A, which keeps skin and gut linings, the body barriers, healthy.' },
-  { c:'veg', n:'Broccoli', e:'🥦', f:'Broccoli packs vitamin C, vitamin K and fibre, plus plant compounds that support the body defences.' },
-  { c:'veg', n:'Tomato', e:'🍅', f:'Tomatoes provide vitamin C and lycopene, an antioxidant that helps protect cells.' }
+  { c:'vitc', n:'Amla', e:'🍏', f:'One of the richest natural sources of Vitamin C, helping leucocytes produce defensive enzymes and protect collagen membranes.' },
+  { c:'vitc', n:'Orange', e:'🍊', f:'Contains antioxidants that neutralize reactive oxygen species created when white blood cells fight off pathogens.' },
+  { c:'vitc', n:'Lemon', e:'🍋', f:'Vitamin C assists cellular enzymes and enhances dietary iron absorption required for healthy blood.' },
+  { c:'vitc', n:'Kiwi', e:'🥝', f:'Packed with Vitamin C and dietary fiber, boosting leucocyte motility and immune signaling.' },
+  { c:'protein', n:'Dal (Lentils)', e:'🫘', f:'Provides plant proteins broken down into amino acids to synthesize new cell structural proteins.' },
+  { c:'protein', n:'Egg', e:'🥚', f:'Contains complete essential amino acids that cells use to repair damaged lipid bilayer membranes.' },
+  { c:'protein', n:'Paneer', e:'🧀', f:'Rich in protein and calcium, helping build structural tissue biomass and supporting cell signals.' },
+  { c:'protein', n:'Milk', e:'🥛', f:'Contains casein and whey proteins that supply amino acids for cellular growth and membrane maintenance.' },
+  { c:'protein', n:'Peanuts', e:'🥜', f:'High in protein, healthy fatty acids, and Vitamin E that protect white blood cell membranes.' },
+  { c:'veg', n:'Spinach (Palak)', e:'🥬', f:'Rich in iron and Vitamin K. Iron helps red blood cells transport oxygen so immune cells can produce ATP energy.' },
+  { c:'veg', n:'Carrot', e:'🥕', f:'Beta-carotene converts into Vitamin A, maintaining epithelial barrier linings to stop pathogens entering.' },
+  { c:'veg', n:'Broccoli', e:'🥦', f:'Contains sulforaphane and Vitamin C, stimulating protective antioxidant enzymes inside cells.' },
+  { c:'veg', n:'Tomato', e:'🍅', f:'Provides lycopene and Vitamin C, protecting cell organelle membranes from toxic oxidative damage.' },
+  { c:'junk', n:'French Fries', e:'🍟', f:'High in trans fats and deep-fried oils that trigger cellular inflammation, making leucocyte movements sluggish.' },
+  { c:'junk', n:'Burger', e:'🍔', f:'Excess saturated fats slow down cellular metabolism and impair white blood cell chemotaxis (movement).' },
+  { c:'junk', n:'Fizzy Soda', e:'🥤', f:'Excessive refined sugar spikes blood glucose, temporarily paralyzing white blood cells and slowing enzyme beam recharge.' },
+  { c:'junk', n:'Donut', e:'🍩', f:'Refined flour and sugars increase free-radical stress in tissue fluids, weakening cell membrane defenses.' }
+];
+
+const DEBRIEF_LESSONS = [
+  "Amino acids from proteins (like Dal, Eggs, and Milk) are essential building blocks. Without them, leucocytes cannot repair damaged membrane walls or seal breach cracks!",
+  "Vitamin C acts as an antioxidant shield for leucocytes. When fighting bacteria, white blood cells consume high levels of Vitamin C to prevent self-injury from reactive oxygen molecules.",
+  "Unhealthy junk foods high in refined sugars and trans fats cause cellular inflammation, slowing down leucocyte movement and delaying immune response times."
 ];
 
 /* ---------- State ---------- */
 let scene, camera, renderer, player, shieldMesh, rangeRing, clock, rafId, sun;
 let germs = [], drops = [], bolts = [], fx = [], breachCracks = [];
 const keys = {};
-let health, shield, kills, wave, elapsed, lastHit, zapReady, vitcLvl, vitcUntil, nextSpawn, nextSky, shake;
-let eaten = { vitc: 0, protein: 0, veg: 0 };
-let gameActive = false, isPaused = false, initialised = false, audioCtx = null;
+let health, shield, kills, wave, elapsed, lastHit, zapReady, vitcLvl, vitcUntil, nextSpawn, nextSky, shake, biomassScrap;
+let junkDebuffUntil = 0;
+let eaten = { vitc: 0, protein: 0, veg: 0, junk: 0 };
+let gameActive = false, isPaused = false, initialised = false, audioCtx = null, debriefInterval = null;
 const $ = id => document.getElementById(id);
 const rand = (a, b) => a + Math.random() * (b - a);
 const pick = arr => arr[Math.floor(Math.random() * arr.length)];
-const ARENA = 23;
+
+// ARM ARENA DIMENSIONS (Longer Z axis to form an arm/bicep shape)
+const ARM_HALF_X = 14;
+const ARM_HALF_Z = 34;
 
 /* ---------- Audio ---------- */
 function initAudio() {
@@ -187,7 +251,9 @@ const sfx = {
   kill: () => tone('sine', 500, 1000, 0.12, 0.12),
   hit: () => tone('sawtooth', 150, 40, 0.25, 0.2),
   eat: () => { tone('sine', 400, 900, 0.15, 0.14); setTimeout(() => tone('sine', 700, 1300, 0.15, 0.1), 90); },
-  block: () => tone('triangle', 900, 500, 0.15, 0.12)
+  debuff: () => { tone('sawtooth', 300, 80, 0.35, 0.2); tone('square', 200, 50, 0.3, 0.15); },
+  block: () => tone('triangle', 900, 500, 0.15, 0.12),
+  repair: () => { tone('sine', 300, 800, 0.2, 0.15); setTimeout(() => tone('sine', 600, 1200, 0.25, 0.15), 100); }
 };
 
 /* ---------- Procedural Visuals ---------- */
@@ -195,21 +261,40 @@ function tissueTexture() {
   const c = document.createElement('canvas'); c.width = c.height = 512;
   const g = c.getContext('2d');
   const gr = g.createRadialGradient(256, 256, 20, 256, 256, 280);
-  gr.addColorStop(0, '#4a1432'); gr.addColorStop(1, '#1e0816');
+  gr.addColorStop(0, '#5a1c2e'); gr.addColorStop(1, '#1e0814');
   g.fillStyle = gr; g.fillRect(0, 0, 512, 512);
-  for (let i = 0; i < 320; i++) {
-    g.fillStyle = `rgba(${120 + Math.random() * 90 | 0},${25 + Math.random() * 40 | 0},${60 + Math.random() * 60 | 0},${Math.random() * 0.13})`;
-    g.beginPath(); g.arc(Math.random() * 512, Math.random() * 512, 8 + Math.random() * 40, 0, 7); g.fill();
+  
+  // Muscle fiber striations
+  g.strokeStyle = 'rgba(235,90,120,.2)'; g.lineWidth = 4;
+  for (let i = -100; i < 612; i += 18) {
+    g.beginPath(); g.moveTo(i, 0); g.lineTo(i + 120, 512); g.stroke();
   }
-  g.strokeStyle = 'rgba(255,110,140,.18)'; g.lineWidth = 2;
-  for (let i = 0; i < 24; i++) {
-    g.beginPath(); let x = Math.random() * 512, y = Math.random() * 512; g.moveTo(x, y);
-    for (let k = 0; k < 6; k++) { x += rand(-60, 60); y += rand(-60, 60); g.lineTo(x, y); }
-    g.stroke();
+  for (let i = 0; i < 280; i++) {
+    g.fillStyle = `rgba(${160 + Math.random() * 80 | 0},${35 + Math.random() * 40 | 0},${60 + Math.random() * 60 | 0},${Math.random() * 0.14})`;
+    g.beginPath(); g.arc(Math.random() * 512, Math.random() * 512, 6 + Math.random() * 30, 0, 7); g.fill();
   }
-  const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(2, 2);
+  const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(1.5, 3.5);
   return t;
 }
+
+// Canvas texture generation for the border line with "U DONT HAVE THIS AREAS POST" text
+function buildBorderCanvasTexture(msg) {
+  const c = document.createElement('canvas'); c.width = 2048; c.height = 128;
+  const g = c.getContext('2d');
+  g.fillStyle = 'rgba(244, 63, 94, 0.15)'; g.fillRect(0, 0, 2048, 128);
+  g.strokeStyle = '#f43f5e'; g.lineWidth = 8; g.strokeRect(0, 0, 2048, 128);
+  
+  g.font = 'bold 38px monospace'; g.fillStyle = '#ffcbd5'; g.textAlign = 'center'; g.textBaseline = 'middle';
+  const repeats = 6;
+  for(let i=0; i<repeats; i++) {
+    g.fillText(msg, (i + 0.5) * (2048 / repeats), 64);
+  }
+  const tex = new THREE.CanvasTexture(c);
+  tex.wrapS = THREE.RepeatWrapping; tex.wrapT = THREE.ClampToEdgeWrapping;
+  tex.repeat.set(4, 1);
+  return tex;
+}
+
 function emojiSprite(e) {
   const c = document.createElement('canvas'); c.width = c.height = 128;
   const g = c.getContext('2d'); g.font = '86px serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(e, 64, 70);
@@ -235,20 +320,29 @@ function buildVirus(s, col, em) {
 
 /* ---------- Breach Cracks & Spawners ---------- */
 function buildBreachCracks() {
-  const crackAngles = [0, 1.25, 2.5, 3.76, 5.02];
-  crackAngles.forEach((angle, idx) => {
+  breachCracks.forEach(c => scene.remove(c));
+  breachCracks = [];
+  
+  // Placed strategically along the long arm tissue
+  const crackPositions = [
+    new THREE.Vector3(0, -0.4, -26),
+    new THREE.Vector3(-9, -0.4, -12),
+    new THREE.Vector3(9, -0.4, 0),
+    new THREE.Vector3(-8, -0.4, 15),
+    new THREE.Vector3(0, -0.4, 27)
+  ];
+
+  crackPositions.forEach((pos, idx) => {
     const group = new THREE.Group();
-    const pos = new THREE.Vector3(Math.cos(angle) * (ARENA - 1.5), -0.4, Math.sin(angle) * (ARENA - 1.5));
     group.position.copy(pos);
     
-    // Jagged crack lines
     const lineMat = new THREE.LineBasicMaterial({ color: 0xff2a55, linewidth: 3, transparent: true, opacity: 0.9 });
     const numBranches = 4;
     for (let b = 0; b < numBranches; b++) {
       const points = [];
       let curr = new THREE.Vector3(0, 0, 0);
       points.push(curr.clone());
-      const branchAngle = angle + rand(-0.6, 0.6);
+      const branchAngle = rand(0, 6.28);
       for (let step = 0; step < 5; step++) {
         curr = curr.clone().add(new THREE.Vector3(
           Math.cos(branchAngle + rand(-0.4, 0.4)) * rand(0.8, 1.6),
@@ -261,7 +355,6 @@ function buildBreachCracks() {
       group.add(new THREE.Line(geo, lineMat));
     }
 
-    // Glowing infection void pit
     const pitGeo = new THREE.RingGeometry(0.2, 1.8, 16);
     const pitMat = new THREE.MeshBasicMaterial({ color: 0xff0033, side: THREE.DoubleSide, transparent: true, opacity: 0.65 });
     const pit = new THREE.Mesh(pitGeo, pitMat);
@@ -269,12 +362,19 @@ function buildBreachCracks() {
     pit.position.y = -0.05;
     group.add(pit);
 
-    // Glowing pointlight underneath crack
     const light = new THREE.PointLight(0xff0044, 2.5, 12);
     light.position.set(0, -0.5, 0);
     group.add(light);
 
-    group.userData = { spawnPos: pos.clone(), pitMat, light, id: idx };
+    const patchGeo = new THREE.CircleGeometry(2.2, 16);
+    const patchMat = new THREE.MeshStandardMaterial({ color: 0xf9a8d4, emissive: 0x831843, roughness: 0.3, transparent: true, opacity: 0.85 });
+    const patch = new THREE.Mesh(patchGeo, patchMat);
+    patch.rotation.x = -Math.PI / 2;
+    patch.position.y = 0.02;
+    patch.visible = false;
+    group.add(patch);
+
+    group.userData = { spawnPos: pos.clone(), pitMat, light, lineMat, patch, active: true, id: idx };
     scene.add(group);
     breachCracks.push(group);
   });
@@ -283,10 +383,10 @@ function buildBreachCracks() {
 /* ---------- Scene Init ---------- */
 function initThree() {
   scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x14050e);
-  scene.fog = new THREE.FogExp2(0x14050e, 0.018);
+  scene.background = new THREE.Color(0x0a0207);
+  scene.fog = new THREE.FogExp2(0x0a0207, 0.015);
   camera = new THREE.PerspectiveCamera(62, innerWidth / innerHeight, 0.1, 500);
-  camera.position.set(0, 22, 18);
+  camera.position.set(0, 28, 22);
 
   renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setSize(innerWidth, innerHeight);
@@ -298,25 +398,43 @@ function initThree() {
 
   scene.add(new THREE.HemisphereLight(0xffb3c8, 0x2a1050, 0.9));
   sun = new THREE.DirectionalLight(0xfff0e0, 1.1);
-  sun.position.set(10, 25, 8); sun.castShadow = true;
+  sun.position.set(10, 28, 8); sun.castShadow = true;
   sun.shadow.mapSize.set(1024, 1024);
-  Object.assign(sun.shadow.camera, { left: -30, right: 30, top: 30, bottom: -30, near: 1, far: 70 });
+  Object.assign(sun.shadow.camera, { left: -30, right: 30, top: 40, bottom: -40, near: 1, far: 90 });
   scene.add(sun);
   const rim = new THREE.PointLight(0x38bdf8, 1.4, 60); rim.position.set(-12, 8, -10); scene.add(rim);
 
-  const floor = new THREE.Mesh(new THREE.CylinderGeometry(25, 25, 1.5, 64),
-    new THREE.MeshStandardMaterial({ map: tissueTexture(), roughness: 0.55, metalness: 0.05 }));
+  /* ARM ARENA FLOOR (Tapered Cylinder/Box Shape to mimic human arm muscle) */
+  const armGeo = new THREE.BoxGeometry(ARM_HALF_X * 2, 1.5, ARM_HALF_Z * 2);
+  const armMat = new THREE.MeshStandardMaterial({ map: tissueTexture(), roughness: 0.55, metalness: 0.05 });
+  const floor = new THREE.Mesh(armGeo, armMat);
   floor.position.y = -1.4; floor.receiveShadow = true; scene.add(floor);
 
-  const ring = new THREE.Mesh(new THREE.TorusGeometry(25, 0.45, 16, 120), new THREE.MeshStandardMaterial({ color: 0xff5a7a, emissive: 0xc01040, roughness: 0.3 }));
-  ring.rotation.x = Math.PI / 2; ring.position.y = -0.5; scene.add(ring);
+  /* BORDER LINES AND RESTRICTED AREA BANNERS ("U DONT HAVE THIS AREAS POST") */
+  const borderTex = buildBorderCanvasTexture("U DONT HAVE THIS AREAS POST");
+  
+  // INNER BORDER LINE
+  const innerMat = new THREE.MeshBasicMaterial({ map: borderTex, transparent: true, opacity: 0.95, side: THREE.DoubleSide });
+  const innerBorder = new THREE.Mesh(new THREE.PlaneGeometry(ARM_HALF_X * 2 - 0.5, ARM_HALF_Z * 2 - 0.5), innerMat);
+  innerBorder.rotation.x = -Math.PI / 2; innerBorder.position.y = -0.55; scene.add(innerBorder);
+
+  // OUTER BORDER LINE (RESTRICTED ZONE)
+  const outerMat = new THREE.MeshBasicMaterial({ map: borderTex, transparent: true, opacity: 0.6, side: THREE.DoubleSide });
+  const outerBorder = new THREE.Mesh(new THREE.PlaneGeometry(ARM_HALF_X * 2 + 5, ARM_HALF_Z * 2 + 5), outerMat);
+  outerBorder.rotation.x = -Math.PI / 2; outerBorder.position.y = -0.58; scene.add(outerBorder);
+
+  // Glowing boundary edge lines
+  const edgeMat = new THREE.LineBasicMaterial({ color: 0xf43f5e, linewidth: 4 });
+  const borderBox = new THREE.Box3(new THREE.Vector3(-ARM_HALF_X, -0.5, -ARM_HALF_Z), new THREE.Vector3(ARM_HALF_X, -0.5, ARM_HALF_Z));
+  const helper = new THREE.Box3Helper(borderBox, 0xf43f5e);
+  scene.add(helper);
 
   buildBreachCracks();
 
   const rbcGeo = new THREE.TorusGeometry(0.7, 0.42, 12, 24), rbcMat = stdMat(0xb01030, 0x300008, 0.45);
-  for (let i = 0; i < 45; i++) {
-    const r = new THREE.Mesh(rbcGeo, rbcMat), a = Math.random() * 6.28, d = rand(27, 55);
-    r.position.set(Math.cos(a) * d, rand(-3, 9), Math.sin(a) * d);
+  for (let i = 0; i < 55; i++) {
+    const r = new THREE.Mesh(rbcGeo, rbcMat);
+    r.position.set(rand(-ARM_HALF_X * 1.5, ARM_HALF_X * 1.5), rand(-3, 9), rand(-ARM_HALF_Z * 1.2, ARM_HALF_Z * 1.2));
     r.rotation.set(rand(0, 3), rand(0, 3), 0); r.userData.spin = rand(0.2, 0.7); r.userData.bob = Math.random() * 6;
     scene.add(r); (initThree.rbc = initThree.rbc || []).push(r);
   }
@@ -367,9 +485,12 @@ function updateHUD() {
   $('health-val').textContent = h + '%'; $('health-bar').style.width = h + '%';
   $('shield-val').textContent = shield > 0 ? '🛡️'.repeat(shield) : 'none';
   $('score-val').textContent = kills; $('wave-val').textContent = wave;
+  $('scrap-val').textContent = biomassScrap;
+  
+  const activeCracks = breachCracks.filter(c => c.userData.active).length;
+  $('cracks-count').textContent = `${activeCracks}/5`;
 }
 
-/* Pause & Resume Modal for Reading Food Facts */
 function openFoodModal(food) {
   isPaused = true;
   clock.stop();
@@ -400,9 +521,15 @@ function burst(pos, color, size = 1.5) {
   const m = new THREE.Mesh(new THREE.SphereGeometry(0.5, 12, 12), new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.8 }));
   m.position.copy(pos); scene.add(m); fx.push({ m, life: 0.35, max: 0.35, size });
 }
-function arenaPos(r = 20) { const a = Math.random() * 6.28, d = Math.sqrt(Math.random()) * r; return new THREE.Vector3(Math.cos(a) * d, 0, Math.sin(a) * d); }
+
+function armArenaPos() { 
+  return new THREE.Vector3(rand(-ARM_HALF_X + 2, ARM_HALF_X - 2), 0, rand(-ARM_HALF_Z + 2, ARM_HALF_Z - 2)); 
+}
 
 function spawnGerm() {
+  const activeCracks = breachCracks.filter(c => c.userData.active);
+  if (activeCracks.length === 0) return;
+
   const roll = Math.random(); let kind = 'virus';
   if (wave >= 3 && roll < 0.18) kind = 'brute'; else if (roll < 0.5) kind = 'bacteria';
   let g, hp, spd, rad;
@@ -416,22 +543,20 @@ function spawnGerm() {
   }
   g.traverse(o => { if (o.isMesh) o.castShadow = true; });
   
-  // Choose random crack line as spawn portal
-  const crack = pick(breachCracks);
+  const crack = pick(activeCracks);
   const spawnOrigin = crack.userData.spawnPos.clone();
   g.position.set(spawnOrigin.x, 0, spawnOrigin.z);
   
-  // Burst animation on crack emergence
   burst(spawnOrigin, 0xff0044, 2.0);
 
   g.userData = { hp, maxHp: hp, spd: spd + wave * 0.15, rad, kind, flash: 0, wob: Math.random() * 6 };
   scene.add(g); germs.push(g);
 }
 
-function spawnDrop(pos) {
+function spawnNaturalFoodDrop(pos) {
   const food = pick(FOODS), cat = CATS[food.c];
   const g = new THREE.Group();
-  g.add(new THREE.Mesh(new THREE.SphereGeometry(0.95, 24, 24), new THREE.MeshBasicMaterial({ color: cat.color, transparent: true, opacity: 0.3 })));
+  g.add(new THREE.Mesh(new THREE.SphereGeometry(0.95, 24, 24), new THREE.MeshBasicMaterial({ color: cat.color, transparent: true, opacity: 0.35 })));
   const spr = emojiSprite(food.e); spr.position.y = 0.2; g.add(spr);
   g.position.copy(pos); g.position.y = 0.9;
   g.userData = { food, life: 16, bob: Math.random() * 6 };
@@ -464,8 +589,9 @@ function makeBolt(a, b) {
   scene.add(grp); bolts.push({ grp, life: 0.2 });
 }
 function zap() {
+  const cooldown = (elapsed < junkDebuffUntil) ? 0.8 : 0.4;
   if (elapsed < zapReady) return;
-  const s = stats(); zapReady = elapsed + 0.4;
+  const s = stats(); zapReady = elapsed + cooldown;
   let cur = nearest(player.position, s.range, []);
   if (!cur) { sfx.fizz(); return; }
   const hit = [cur]; let from = player.position;
@@ -484,34 +610,62 @@ function sweepDead() {
     const g = germs[i];
     if (g.userData.hp <= 0) {
       burst(g.position, 0xffe066, 2.4); sfx.kill(); kills++;
-      if (Math.random() < 0.55) spawnDrop(g.position);
       removeFrom(germs, g);
-      if (kills >= wave * 8) { wave++; showAlert('WAVE ' + wave + ': STRONGER PATHOGENS!', '#d8b4fe'); }
+      if (kills >= wave * 8) { wave++; showAlert('INFECTION WAVE ' + wave + ': PATHOGENS INTENSIFY!', '#d8b4fe'); }
       updateHUD();
     }
   }
 }
 
-/* ---------- State Management ---------- */
+/* ---------- State Management & Debrief Timer ---------- */
 function resetState() {
   [...germs, ...drops].forEach(o => scene.remove(o)); bolts.forEach(b => scene.remove(b.grp)); fx.forEach(f => scene.remove(f.m));
   germs = []; drops = []; bolts = []; fx = [];
-  health = 100; shield = 0; kills = 0; wave = 1; elapsed = 0; lastHit = -10; zapReady = 0;
-  vitcLvl = 0; vitcUntil = 0; nextSpawn = 0; nextSky = 4; shake = 0; eaten = { vitc: 0, protein: 0, veg: 0 };
+  health = 100; shield = 0; kills = 0; wave = 1; elapsed = 0; lastHit = -10; zapReady = 0; biomassScrap = 0; junkDebuffUntil = 0;
+  vitcLvl = 0; vitcUntil = 0; nextSpawn = 0; nextSky = 2; shake = 0; eaten = { vitc: 0, protein: 0, veg: 0, junk: 0 };
   player.position.set(0, 0, 0);
+  buildBreachCracks();
   for (let i = 0; i < 4; i++) spawnGerm();
   updateHUD();
 }
 function startGame() {
+  if (debriefInterval) clearInterval(debriefInterval);
   initAudio(); if (!initialised) initThree(); resetState();
   $('start-screen').classList.add('gone'); $('gameover-screen').classList.add('gone'); $('hud').classList.remove('gone');
   gameActive = true; isPaused = false; clock.start(); clock.getDelta(); cancelAnimationFrame(rafId); animate();
 }
+
 function endGame() {
   gameActive = false;
   $('final-score').textContent = kills;
-  $('final-foods').textContent = `Foods eaten: ${eaten.vitc} vitamin C, ${eaten.protein} protein, ${eaten.veg} vegetable`;
-  $('hud').classList.add('gone'); $('gameover-screen').classList.remove('gone');
+  $('final-wave').textContent = wave;
+  $('final-foods').textContent = `Nutrients absorbed: ${eaten.vitc} Vitamin C, ${eaten.protein} Protein, ${eaten.veg} Vegetables | Junk items: ${eaten.junk}`;
+  
+  $('debrief-text').textContent = pick(DEBRIEF_LESSONS);
+
+  $('hud').classList.add('gone'); 
+  $('gameover-screen').classList.remove('gone');
+
+  let countdown = 15;
+  const btn = $('restart-btn');
+  btn.disabled = true;
+  btn.className = "w-full py-4 bg-slate-800 text-slate-400 font-bold rounded-2xl shadow-lg cursor-not-allowed transition-all";
+  $('debrief-timer').textContent = countdown + 's';
+  $('btn-timer').textContent = countdown;
+
+  if (debriefInterval) clearInterval(debriefInterval);
+  debriefInterval = setInterval(() => {
+    countdown--;
+    $('debrief-timer').textContent = countdown + 's';
+    $('btn-timer').textContent = countdown;
+    
+    if (countdown <= 0) {
+      clearInterval(debriefInterval);
+      btn.disabled = false;
+      btn.textContent = "REGENERATE CELL & RETRY ➔";
+      btn.className = "w-full py-4 bg-rose-600 hover:bg-rose-500 text-white font-bold rounded-2xl shadow-lg shadow-rose-600/30 transition-all transform active:scale-95 cursor-pointer";
+    }
+  }, 1000);
 }
 
 /* ---------- Main Animation Loop ---------- */
@@ -523,37 +677,79 @@ function animate() {
   const dt = Math.min(clock.getDelta(), 0.05), time = performance.now() / 1000;
   (initThree.rbc || []).forEach(r => { r.rotation.x += r.userData.spin * dt; r.position.y += Math.sin(time + r.userData.bob) * 0.005; });
 
-  // Pulsate breach crack glow
   breachCracks.forEach(c => {
-    c.userData.pitMat.opacity = 0.45 + Math.sin(time * 4 + c.userData.id) * 0.25;
-    c.userData.light.intensity = 2.0 + Math.sin(time * 5 + c.userData.id) * 1.2;
+    if (c.userData.active) {
+      c.userData.pitMat.opacity = 0.45 + Math.sin(time * 4 + c.userData.id) * 0.25;
+      c.userData.light.intensity = 2.0 + Math.sin(time * 5 + c.userData.id) * 1.2;
+
+      if (gameActive && biomassScrap > 0) {
+        const crackPos = new THREE.Vector3(c.userData.spawnPos.x, 0, c.userData.spawnPos.z);
+        if (player.position.distanceTo(crackPos) < 2.5) {
+          biomassScrap--;
+          c.userData.active = false;
+          c.userData.patch.visible = true;
+          c.userData.pitMat.opacity = 0;
+          c.userData.lineMat.opacity = 0.1;
+          c.userData.light.intensity = 0.2;
+          sfx.repair();
+          showAlert('MEMBRANE BREACH SEALED WITH AMINO BIOMASS!', '#f9a8d4');
+          burst(crackPos, 0xff6fa5, 3.5);
+          updateHUD();
+        }
+      }
+    }
   });
 
   if (gameActive) {
     elapsed += dt;
     const s = stats();
+    
+    const speedMultiplier = (elapsed < junkDebuffUntil) ? 6.5 : 12.0;
+
     let dx = 0, dz = 0;
     if (keys['w'] || keys['arrowup']) dz--; if (keys['s'] || keys['arrowdown']) dz++;
     if (keys['a'] || keys['arrowleft']) dx--; if (keys['d'] || keys['arrowright']) dx++;
     const len = Math.hypot(dx, dz) || 1;
-    player.position.x += dx / len * 12 * dt; player.position.z += dz / len * 12 * dt;
-    const d = Math.hypot(player.position.x, player.position.z);
-    if (d > ARENA) { player.position.x *= ARENA / d; player.position.z *= ARENA / d; }
+    player.position.x += dx / len * speedMultiplier * dt; player.position.z += dz / len * speedMultiplier * dt;
+    
+    /* STRICT RECTANGULAR ARM BORDER CLAMPING WITH WARNING ALERT */
+    if (Math.abs(player.position.x) > ARM_HALF_X) {
+      player.position.x = Math.sign(player.position.x) * ARM_HALF_X;
+      showAlert('U DONT HAVE THIS AREAS POST!', '#f43f5e');
+    }
+    if (Math.abs(player.position.z) > ARM_HALF_Z) {
+      player.position.z = Math.sign(player.position.z) * ARM_HALF_Z;
+      showAlert('U DONT HAVE THIS AREAS POST!', '#f43f5e');
+    }
+
     player.rotation.y += dt * 0.6; player.scale.setScalar(1 + Math.sin(time * 3) * 0.03);
     if (keys[' '] || keys['click']) zap();
 
     shieldMesh.visible = shield > 0; shieldMesh.position.copy(player.position);
     rangeRing.position.x = player.position.x; rangeRing.position.z = player.position.z;
     rangeRing.scale.setScalar(s.range);
-    rangeRing.material.color.setHex(s.lvl ? 0xfdba74 : 0x67e8f9);
+    
+    if (elapsed < junkDebuffUntil) {
+      rangeRing.material.color.setHex(0xef4444);
+    } else {
+      rangeRing.material.color.setHex(s.lvl ? 0xfdba74 : 0x67e8f9);
+    }
+    
     $('zap-bar').style.width = Math.min(100, (1 - Math.max(0, zapReady - elapsed) / 0.4) * 100) + '%';
-    $('buff-val').textContent = s.lvl ? `🍊 Vit C x${s.lvl}: range ${s.range.toFixed(1)}, dmg ${s.dmg}, chains ${s.chains}` : '';
+    
+    let buffStatusText = s.lvl ? `🍊 Vit C x${s.lvl}: Range ${s.range.toFixed(1)}, Power ${s.dmg}` : '';
+    if (elapsed < junkDebuffUntil) {
+      buffStatusText += ` | ⚠️ SLUGGISH DEBUFF (${Math.ceil(junkDebuffUntil - elapsed)}s)`;
+    }
+    $('buff-val').textContent = buffStatusText;
 
-    // Spawning Logic
     if (elapsed > nextSpawn && germs.length < 5 + wave * 2) { spawnGerm(); nextSpawn = elapsed + Math.max(0.8, 2.6 - wave * 0.2); }
-    if (elapsed > nextSky) { if (drops.length < 7) spawnDrop(arenaPos()); nextSky = elapsed + 7; }
+    
+    if (elapsed > nextSky) { 
+      if (drops.length < 7) spawnNaturalFoodDrop(armArenaPos()); 
+      nextSky = elapsed + 5.5; 
+    }
 
-    // Germ Logic
     for (const g of germs) {
       const u = g.userData, dir = new THREE.Vector3().subVectors(player.position, g.position); dir.y = 0; dir.normalize();
       g.position.addScaledVector(dir, u.spd * dt);
@@ -565,7 +761,7 @@ function animate() {
         lastHit = elapsed;
         const away = new THREE.Vector3().subVectors(g.position, player.position).setY(0).normalize();
         g.position.addScaledVector(away, 6);
-        if (shield > 0) { shield--; sfx.block(); showAlert('SHIELD BLOCKED THE HIT!', '#86efac'); burst(player.position, 0x7dffa8, 3); }
+        if (shield > 0) { shield--; sfx.block(); showAlert('MUCOSAL SHIELD BLOCKED PATHOGEN!', '#86efac'); burst(player.position, 0x7dffa8, 3); }
         else {
           health -= u.kind === 'brute' ? 25 : 15; sfx.hit(); shake = 0.5;
           $('dmg').style.opacity = 1; setTimeout(() => $('dmg').style.opacity = 0, 150);
@@ -576,31 +772,49 @@ function animate() {
     }
     sweepDead();
 
-    // Drop Pickup Logic with Auto-Pause
     for (let i = drops.length - 1; i >= 0; i--) {
       const dr = drops[i], u = dr.userData; u.life -= dt;
       dr.position.y = 0.9 + Math.sin(time * 3 + u.bob) * 0.25;
       dr.scale.setScalar(u.life < 3 ? 0.6 + 0.4 * Math.abs(Math.sin(time * 10)) : 1);
       if (u.life <= 0) { removeFrom(drops, dr); continue; }
       if (player.position.distanceTo(new THREE.Vector3(dr.position.x, 0, dr.position.z)) < 2.4) {
-        const f = u.food; eaten[f.c]++; sfx.eat(); burst(dr.position, CATS[f.c].color, 3);
-        if (f.c === 'vitc') { vitcLvl = Math.min(3, (elapsed < vitcUntil ? vitcLvl : 0) + 1); vitcUntil = elapsed + 15; showAlert('VITAMIN C BOOST! LEVEL ' + vitcLvl, '#fdba74'); }
-        else if (f.c === 'protein') { health = Math.min(100, health + 25); showAlert('MEMBRANE REPAIRED +25', '#f9a8d4'); }
-        else { shield = Math.min(5, shield + 2); showAlert('SHIELD +2 CHARGES', '#86efac'); }
-        removeFrom(drops, dr); updateHUD();
+        const f = u.food; 
+        
+        if (f.c === 'junk') {
+          eaten.junk++;
+          sfx.debuff();
+          junkDebuffUntil = elapsed + 10;
+          showAlert('DEBUFF! JUNK FOOD CAUSED CELLULAR INFLAMMATION!', '#f87171');
+          burst(dr.position, 0xef4444, 3.5);
+        } else {
+          eaten[f.c]++; 
+          sfx.eat(); 
+          burst(dr.position, CATS[f.c].color, 3);
+          
+          if (f.c === 'vitc') { 
+            vitcLvl = Math.min(3, (elapsed < vitcUntil ? vitcLvl : 0) + 1); vitcUntil = elapsed + 15; showAlert('VITAMIN C BOOST! LEVEL ' + vitcLvl, '#fdba74'); 
+          } else if (f.c === 'protein') { 
+            health = Math.min(100, health + 25); 
+            biomassScrap++; 
+            showAlert('MEMBRANE REPAIRED +25 & +1 AMINO BIOMASS!', '#f9a8d4'); 
+          } else { 
+            shield = Math.min(5, shield + 2); showAlert('MUCOSAL SHIELD +2 CHARGES', '#86efac'); 
+          }
+        }
+        
+        removeFrom(drops, dr); 
+        updateHUD();
         openFoodModal(f);
       }
     }
 
-    // Camera with shake
     shake = Math.max(0, shake - dt * 1.5);
     camera.position.x += (player.position.x * 0.4 - camera.position.x) * 2 * dt;
-    camera.position.z += (player.position.z * 0.4 + 18 - camera.position.z) * 2 * dt;
-    camera.position.x += rand(-1, 1) * shake * 0.3; camera.position.y = 22 + rand(-1, 1) * shake * 0.3;
+    camera.position.z += (player.position.z * 0.4 + 22 - camera.position.z) * 2 * dt;
+    camera.position.x += rand(-1, 1) * shake * 0.3; camera.position.y = 28 + rand(-1, 1) * shake * 0.3;
     camera.lookAt(player.position.x * 0.6, 0, player.position.z * 0.6);
   }
 
-  // Visual Effects
   for (let i = bolts.length - 1; i >= 0; i--) {
     const b = bolts[i]; b.life -= dt;
     b.grp.children.forEach(l => l.material.opacity = Math.max(0, b.life / 0.2));
@@ -615,7 +829,9 @@ function animate() {
 }
 
 $('start-btn').addEventListener('click', startGame);
-$('restart-btn').addEventListener('click', startGame);
+$('restart-btn').addEventListener('click', () => {
+  if (!$('restart-btn').disabled) startGame();
+});
 </script>
 </body>
 </html>
