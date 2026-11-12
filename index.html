@@ -87,7 +87,7 @@
   <div class="glass p-8 rounded-3xl max-w-2xl text-center max-h-[95vh] overflow-y-auto">
     <div class="text-sky-400 font-bold tracking-widest text-xs uppercase mb-1">PM-POSHAN Digital Creativity Challenge</div>
     <h1 class="text-4xl sm:text-5xl font-black mb-3 bg-gradient-to-r from-sky-400 via-cyan-300 to-emerald-400 bg-clip-text text-transparent">CELL SURVIVAL: BODY BREACHED</h1>
-    <p class="text-slate-300 text-xs sm:text-sm mb-5 leading-relaxed">You command a Leucocyte (White Blood Cell). Pathogens are attacking the bloodstream! Zap germs and absorb nutrient drops to keep the cellular wall intact.</p>
+    <p class="text-slate-300 text-xs sm:text-sm mb-5 leading-relaxed">You command a Leucocyte (White Blood Cell). Pathogens are leaking into the bloodstream through membrane cracks! Zap germs and absorb nutrient drops to keep the cellular wall intact.</p>
     
     <!-- EDUCATIONAL SECTION -->
     <div class="bg-slate-900/80 rounded-2xl p-4 text-left border border-cyan-500/30 mb-6 space-y-3">
@@ -159,7 +159,7 @@ const FOODS = [
 
 /* ---------- State ---------- */
 let scene, camera, renderer, player, shieldMesh, rangeRing, clock, rafId, sun;
-let germs = [], drops = [], bolts = [], fx = [];
+let germs = [], drops = [], bolts = [], fx = [], breachCracks = [];
 const keys = {};
 let health, shield, kills, wave, elapsed, lastHit, zapReady, vitcLvl, vitcUntil, nextSpawn, nextSky, shake;
 let eaten = { vitc: 0, protein: 0, veg: 0 };
@@ -233,6 +233,53 @@ function buildVirus(s, col, em) {
   return g;
 }
 
+/* ---------- Breach Cracks & Spawners ---------- */
+function buildBreachCracks() {
+  const crackAngles = [0, 1.25, 2.5, 3.76, 5.02];
+  crackAngles.forEach((angle, idx) => {
+    const group = new THREE.Group();
+    const pos = new THREE.Vector3(Math.cos(angle) * (ARENA - 1.5), -0.4, Math.sin(angle) * (ARENA - 1.5));
+    group.position.copy(pos);
+    
+    // Jagged crack lines
+    const lineMat = new THREE.LineBasicMaterial({ color: 0xff2a55, linewidth: 3, transparent: true, opacity: 0.9 });
+    const numBranches = 4;
+    for (let b = 0; b < numBranches; b++) {
+      const points = [];
+      let curr = new THREE.Vector3(0, 0, 0);
+      points.push(curr.clone());
+      const branchAngle = angle + rand(-0.6, 0.6);
+      for (let step = 0; step < 5; step++) {
+        curr = curr.clone().add(new THREE.Vector3(
+          Math.cos(branchAngle + rand(-0.4, 0.4)) * rand(0.8, 1.6),
+          0,
+          Math.sin(branchAngle + rand(-0.4, 0.4)) * rand(0.8, 1.6)
+        ));
+        points.push(curr);
+      }
+      const geo = new THREE.BufferGeometry().setFromPoints(points);
+      group.add(new THREE.Line(geo, lineMat));
+    }
+
+    // Glowing infection void pit
+    const pitGeo = new THREE.RingGeometry(0.2, 1.8, 16);
+    const pitMat = new THREE.MeshBasicMaterial({ color: 0xff0033, side: THREE.DoubleSide, transparent: true, opacity: 0.65 });
+    const pit = new THREE.Mesh(pitGeo, pitMat);
+    pit.rotation.x = -Math.PI / 2;
+    pit.position.y = -0.05;
+    group.add(pit);
+
+    // Glowing pointlight underneath crack
+    const light = new THREE.PointLight(0xff0044, 2.5, 12);
+    light.position.set(0, -0.5, 0);
+    group.add(light);
+
+    group.userData = { spawnPos: pos.clone(), pitMat, light, id: idx };
+    scene.add(group);
+    breachCracks.push(group);
+  });
+}
+
 /* ---------- Scene Init ---------- */
 function initThree() {
   scene = new THREE.Scene();
@@ -263,6 +310,8 @@ function initThree() {
 
   const ring = new THREE.Mesh(new THREE.TorusGeometry(25, 0.45, 16, 120), new THREE.MeshStandardMaterial({ color: 0xff5a7a, emissive: 0xc01040, roughness: 0.3 }));
   ring.rotation.x = Math.PI / 2; ring.position.y = -0.5; scene.add(ring);
+
+  buildBreachCracks();
 
   const rbcGeo = new THREE.TorusGeometry(0.7, 0.42, 12, 24), rbcMat = stdMat(0xb01030, 0x300008, 0.45);
   for (let i = 0; i < 45; i++) {
@@ -366,7 +415,15 @@ function spawnGerm() {
     g = buildVirus(1, 0xf43f5e, 0x7a0a20); hp = 2; spd = 3.8 + Math.random(); rad = 1.4;
   }
   g.traverse(o => { if (o.isMesh) o.castShadow = true; });
-  const a = Math.random() * 6.28; g.position.set(Math.cos(a) * 22, 0, Math.sin(a) * 22);
+  
+  // Choose random crack line as spawn portal
+  const crack = pick(breachCracks);
+  const spawnOrigin = crack.userData.spawnPos.clone();
+  g.position.set(spawnOrigin.x, 0, spawnOrigin.z);
+  
+  // Burst animation on crack emergence
+  burst(spawnOrigin, 0xff0044, 2.0);
+
   g.userData = { hp, maxHp: hp, spd: spd + wave * 0.15, rad, kind, flash: 0, wob: Math.random() * 6 };
   scene.add(g); germs.push(g);
 }
@@ -465,6 +522,12 @@ function animate() {
 
   const dt = Math.min(clock.getDelta(), 0.05), time = performance.now() / 1000;
   (initThree.rbc || []).forEach(r => { r.rotation.x += r.userData.spin * dt; r.position.y += Math.sin(time + r.userData.bob) * 0.005; });
+
+  // Pulsate breach crack glow
+  breachCracks.forEach(c => {
+    c.userData.pitMat.opacity = 0.45 + Math.sin(time * 4 + c.userData.id) * 0.25;
+    c.userData.light.intensity = 2.0 + Math.sin(time * 5 + c.userData.id) * 1.2;
+  });
 
   if (gameActive) {
     elapsed += dt;
